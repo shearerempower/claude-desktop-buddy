@@ -205,7 +205,7 @@ header {
     <div class="mc" style="--ac:#ffd93d">
       <div class="mc-l">Temp</div>
       <div class="mc-v" id="v-temp">—</div>
-      <div class="mc-u">°C</div>
+      <div class="mc-u">°F</div>
     </div>
     <div class="mc" style="--ac:#74b9ff">
       <div class="mc-l">Humidity</div>
@@ -252,7 +252,7 @@ header {
     </div>
     <div class="cc">
       <div class="cc-t">Temperature &amp; Humidity</div>
-      <div class="cc-s">°C (left axis) · %RH (right axis)</div>
+      <div class="cc-s">°F (left axis) · %RH (right axis)</div>
       <div class="cbox"><canvas id="c-th"></canvas></div>
     </div>
     <div class="cc wide">
@@ -363,7 +363,7 @@ function initCharts() {
   CH.th = new Chart(document.getElementById('c-th'), {
     type: 'line',
     data: { datasets: [
-      ds('Temp °C',    [], '#ffd93d', 'y'),
+      ds('Temp °F',    [], '#ffd93d', 'y'),
       ds('Humidity %', [], '#74b9ff', 'y2')
     ]},
     options: deepMerge(BASE, {
@@ -422,7 +422,7 @@ function setMeta(lat) {
   document.getElementById('v-pm25').textContent = fv(lat.pm25, 1);
   document.getElementById('v-pm10').textContent = fv(lat.pm10, 1);
   document.getElementById('v-voc').textContent  = fv(lat.voc);
-  document.getElementById('v-temp').textContent = fv(lat.temp, 1);
+  document.getElementById('v-temp').textContent = fv(lat.temp * 9/5 + 32, 1);
   document.getElementById('v-hum').textContent  = fv(lat.hum);
   document.getElementById('v-aqi').textContent  = fv(lat.aqi);
   document.getElementById('v-lbl').textContent  = lat.label || '—';
@@ -446,7 +446,7 @@ function setCharts(rows) {
   CH.pm.data.datasets[0].data  = pts(function(r){ return r[3]; });
   CH.pm.data.datasets[1].data  = pts(function(r){ return r[5]; });
   CH.voc.data.datasets[0].data = pts(function(r){ return r[6]; });
-  CH.th.data.datasets[0].data  = pts(function(r){ return r[7]; });
+  CH.th.data.datasets[0].data  = pts(function(r){ return r[7] * 9/5 + 32; });
   CH.th.data.datasets[1].data  = pts(function(r){ return r[8]; });
   CH.aqi.data.datasets[0].data = pts(function(r){ return r[9]; });
 
