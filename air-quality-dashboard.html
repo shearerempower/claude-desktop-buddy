@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AirBuddy – Air Quality Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+:root {
+  --bg:      #080c18;
+  --s1:      rgba(255,255,255,.05);
+  --s2:      rgba(255,255,255,.09);
+  --border:  rgba(255,255,255,.09);
+  --text:    #e8eaf6;
+  --muted:   #6272a4;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse at 15% 50%, rgba(102,68,238,.13) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 15%, rgba(0,180,216,.10) 0%, transparent 55%);
+}
+
+/* ── Header ──────────────────────────────────────────── */
+header {
+  padding: 16px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: rgba(8,12,24,.88);
+  backdrop-filter: blur(20px);
+  position: sticky; top: 0; z-index: 100;
+}
+.logo { display: flex; align-items: center; gap: 12px; }
+.logo-icon {
+  width: 40px; height: 40px;
+  background: linear-gradient(135deg,#6644ee,#00b4d8);
+  border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.logo h1 { font-size: 17px; font-weight: 700; letter-spacing: -.4px; }
+.logo p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.hdr-r { display: flex; align-items: center; gap: 14px; }
+.badge {
+  padding: 5px 14px; border-radius: 100px;
+  font-weight: 700; font-size: 13px;
+  background: rgba(255,255,255,.08); color: var(--text);
+  transition: background .4s, color .4s;
+}
+.upd { font-size: 11px; color: var(--muted); }
+
+/* ── Main ────────────────────────────────────────────── */
+.wrap { max-width: 1440px; margin: 0 auto; padding: 28px 32px; }
+
+/* ── Metric cards ────────────────────────────────────── */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px,1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+.mc {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 16px;
+  position: relative; overflow: hidden;
+  transition: transform .18s, border-color .18s;
+  cursor: default;
+}
+.mc::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--ac, #888);
+}
+.mc:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.18); }
+.mc-l { font-size: 10px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+.mc-v { font-size: 28px; font-weight: 700; letter-spacing: -1px; color: var(--ac,#fff); line-height: 1; }
+.mc-u { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* ── Range selector ──────────────────────────────────── */
+.ranges {
+  display: flex; gap: 4px;
+  margin-bottom: 26px;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+  width: fit-content;
+}
+.rb {
+  padding: 7px 18px; border-radius: 8px;
+  border: none; background: transparent;
+  color: var(--muted); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all .18s;
+  white-space: nowrap;
+}
+.rb:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.rb.on { background: linear-gradient(135deg,#6644ee,#00b4d8); color: #fff; }
+
+/* ── Charts grid ─────────────────────────────────────── */
+.cgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(500px,1fr));
+  gap: 20px;
+}
+.cc {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 22px 24px;
+}
+.cc.wide { grid-column: 1 / -1; }
+.cc-t { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+.cc-s { font-size: 10px; color: var(--muted); margin-bottom: 18px; }
+.cbox    { height: 200px; position: relative; }
+.cbox-sm { height: 165px; position: relative; }
+
+/* ── Status bar ──────────────────────────────────────── */
+.sbar {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 22px; padding: 13px 18px;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 11px; color: var(--muted);
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #2ecc71; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+/* ── AQI badge colours ───────────────────────────────── */
+.good      { background: #27ae60 !important; color: #fff !important; }
+.moderate  { background: #e6b800 !important; color: #111 !important; }
+.sensitive { background: #e67e22 !important; color: #fff !important; }
+.unhealthy { background: #e74c3c !important; color: #fff !important; }
+.verybad   { background: #8e44ad !important; color: #fff !important; }
+.hazardous { background: #7b241c !important; color: #fff !important; }
+
+/* ── AQI chart background bands ──────────────────────── */
+.aqi-legend {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px;
+}
+.aqi-chip {
+  font-size: 9px; font-weight: 600; padding: 2px 8px;
+  border-radius: 4px; letter-spacing: .4px; text-transform: uppercase;
+}
+
+@media (max-width: 780px) {
+  header { padding: 14px 16px; }
+  .wrap  { padding: 16px; }
+  .cgrid { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: repeat(3,1fr); }
+  .ranges { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">💨</div>
+    <div>
+      <h1>AirBuddy</h1>
+      <p>Air Quality Monitor</p>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <div id="badge" class="badge">— Loading —</div>
+    <div class="upd" id="upd"></div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- Current readings -->
+  <div class="metrics">
+    <div class="mc" style="--ac:#ff6b6b">
+      <div class="mc-l">CO₂</div>
+      <div class="mc-v" id="v-co2">—</div>
+      <div class="mc-u">ppm</div>
+    </div>
+    <div class="mc" style="--ac:#4ecdc4">
+      <div class="mc-l">PM2.5</div>
+      <div class="mc-v" id="v-pm25">—</div>
+      <div class="mc-u">μg/m³</div>
+    </div>
+    <div class="mc" style="--ac:#45b7d1">
+      <div class="mc-l">PM10</div>
+      <div class="mc-v" id="v-pm10">—</div>
+      <div class="mc-u">μg/m³</div>
+    </div>
+    <div class="mc" style="--ac:#96ceb4">
+      <div class="mc-l">VOC</div>
+      <div class="mc-v" id="v-voc">—</div>
+      <div class="mc-u">index</div>
+    </div>
+    <div class="mc" style="--ac:#ffd93d">
+      <div class="mc-l">Temp</div>
+      <div class="mc-v" id="v-temp">—</div>
+      <div class="mc-u">°C</div>
+    </div>
+    <div class="mc" style="--ac:#74b9ff">
+      <div class="mc-l">Humidity</div>
+      <div class="mc-v" id="v-hum">—</div>
+      <div class="mc-u">%RH</div>
+    </div>
+    <div class="mc" style="--ac:#a29bfe">
+      <div class="mc-l">AQI</div>
+      <div class="mc-v" id="v-aqi">—</div>
+      <div class="mc-u" id="v-lbl">—</div>
+    </div>
+    <div class="mc" style="--ac:#55efc4">
+      <div class="mc-l">Battery</div>
+      <div class="mc-v" id="v-bat">—</div>
+      <div class="mc-u">%</div>
+    </div>
+  </div>
+
+  <!-- Time range selector -->
+  <div class="ranges">
+    <button class="rb on" data-r="1hr">1 Hr</button>
+    <button class="rb"    data-r="24hr">24 Hr</button>
+    <button class="rb"    data-r="3day">3 Day</button>
+    <button class="rb"    data-r="7day">7 Day</button>
+    <button class="rb"    data-r="1month">1 Month</button>
+  </div>
+
+  <!-- Charts -->
+  <div class="cgrid">
+    <div class="cc">
+      <div class="cc-t">CO₂ Concentration</div>
+      <div class="cc-s">ppm — indoor alert threshold 1000 ppm</div>
+      <div class="cbox"><canvas id="c-co2"></canvas></div>
+    </div>
+    <div class="cc">
+      <div class="cc-t">Particulate Matter</div>
+      <div class="cc-s">μg/m³ — PM2.5 (teal) &amp; PM10 (blue)</div>
+      <div class="cbox"><canvas id="c-pm"></canvas></div>
+    </div>
+    <div class="cc">
+      <div class="cc-t">VOC Index</div>
+      <div class="cc-s">Sensirion 0–500 — alert ≥ 200</div>
+      <div class="cbox"><canvas id="c-voc"></canvas></div>
+    </div>
+    <div class="cc">
+      <div class="cc-t">Temperature &amp; Humidity</div>
+      <div class="cc-s">°C (left axis) · %RH (right axis)</div>
+      <div class="cbox"><canvas id="c-th"></canvas></div>
+    </div>
+    <div class="cc wide">
+      <div class="cc-t">Air Quality Index (AQI)</div>
+      <div class="cc-s">EPA PM2.5 scale</div>
+      <div class="cbox-sm"><canvas id="c-aqi"></canvas></div>
+      <div class="aqi-legend">
+        <span class="aqi-chip" style="background:#27ae60;color:#fff">Good 0–50</span>
+        <span class="aqi-chip" style="background:#e6b800;color:#111">Moderate 51–100</span>
+        <span class="aqi-chip" style="background:#e67e22;color:#fff">Sensitive 101–150</span>
+        <span class="aqi-chip" style="background:#e74c3c;color:#fff">Unhealthy 151–200</span>
+        <span class="aqi-chip" style="background:#8e44ad;color:#fff">Very Bad 201–300</span>
+        <span class="aqi-chip" style="background:#7b241c;color:#fff">Hazardous &gt;300</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sbar">
+    <div class="dot"></div>
+    <span id="stxt">Connecting…</span>
+    <span style="margin-left:auto" id="pts"></span>
+  </div>
+
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+var API = 'https://script.google.com/macros/s/AKfycbz0DRCvhoGwi_Da9qHQCGk-UIPCFXm24qJWi1qoifibhA6alvT9fJWwS3Cxiwq9ijbP/exec';
+var range = '1hr';
+var CH = {};
+var refreshTimer = null;
+
+// ─── Shared chart defaults ────────────────────────────────────────────────────
+var BASE = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 320 },
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: {
+      labels: { color: '#6272a4', font: { size: 10 }, boxWidth: 10, padding: 14 }
+    },
+    tooltip: {
+      backgroundColor: 'rgba(6,10,22,.96)',
+      borderColor: 'rgba(255,255,255,.1)', borderWidth: 1,
+      titleColor: '#e8eaf6', bodyColor: '#a6afd4',
+      padding: 10, cornerRadius: 8
+    }
+  },
+  scales: {
+    x: {
+      type: 'time',
+      grid: { color: 'rgba(255,255,255,.04)' },
+      ticks: { color: '#6272a4', maxRotation: 0, font: { size: 9 }, maxTicksLimit: 8 }
+    },
+    y: {
+      grid: { color: 'rgba(255,255,255,.05)' },
+      ticks: { color: '#6272a4', font: { size: 9 } }
+    }
+  }
+};
+
+function deepMerge(a, b) {
+  var r = {};
+  Object.keys(a).forEach(function(k) { r[k] = a[k]; });
+  Object.keys(b).forEach(function(k) {
+    if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object') {
+      r[k] = deepMerge(a[k], b[k]);
+    } else {
+      r[k] = b[k];
+    }
+  });
+  return r;
+}
+
+function ds(label, data, color, ax) {
+  return {
+    label: label, data: data,
+    borderColor: color,
+    backgroundColor: color + '1a',
+    borderWidth: 1.8,
+    pointRadius: 0, pointHoverRadius: 4,
+    tension: 0.35, fill: true,
+    yAxisID: ax || 'y'
+  };
+}
+
+// ─── Init charts ──────────────────────────────────────────────────────────────
+function initCharts() {
+  CH.co2 = new Chart(document.getElementById('c-co2'), {
+    type: 'line',
+    data: { datasets: [ds('CO₂ ppm', [], '#ff6b6b')] },
+    options: deepMerge(BASE, { scales: { y: { suggestedMin: 400 } } })
+  });
+
+  CH.pm = new Chart(document.getElementById('c-pm'), {
+    type: 'line',
+    data: { datasets: [ds('PM2.5', [], '#4ecdc4'), ds('PM10', [], '#45b7d1')] },
+    options: BASE
+  });
+
+  CH.voc = new Chart(document.getElementById('c-voc'), {
+    type: 'line',
+    data: { datasets: [ds('VOC Index', [], '#96ceb4')] },
+    options: deepMerge(BASE, { scales: { y: { min: 0 } } })
+  });
+
+  CH.th = new Chart(document.getElementById('c-th'), {
+    type: 'line',
+    data: { datasets: [
+      ds('Temp °C',    [], '#ffd93d', 'y'),
+      ds('Humidity %', [], '#74b9ff', 'y2')
+    ]},
+    options: deepMerge(BASE, {
+      scales: {
+        y:  { position: 'left' },
+        y2: { position: 'right', grid: { drawOnChartArea: false },
+              ticks: { color: '#6272a4', font: { size: 9 } } }
+      }
+    })
+  });
+
+  // AQI with colour band annotations via chart plugin
+  CH.aqi = new Chart(document.getElementById('c-aqi'), {
+    type: 'line',
+    data: { datasets: [ds('AQI', [], '#a29bfe')] },
+    options: deepMerge(BASE, {
+      scales: {
+        y: {
+          min: 0, suggestedMax: 250,
+          ticks: {
+            color: '#6272a4', font: { size: 9 },
+            callback: function(v) {
+              if (v === 50)  return '50 Good';
+              if (v === 100) return '100 Mod';
+              if (v === 150) return '150 Sens';
+              if (v === 200) return '200 Unhlt';
+              return v;
+            }
+          }
+        }
+      }
+    })
+  });
+}
+
+// ─── AQI helper ───────────────────────────────────────────────────────────────
+function aqiClass(a) {
+  if (a <= 50)  return 'good';
+  if (a <= 100) return 'moderate';
+  if (a <= 150) return 'sensitive';
+  if (a <= 200) return 'unhealthy';
+  if (a <= 300) return 'verybad';
+  return 'hazardous';
+}
+
+function fv(v, d) {
+  if (v === null || v === undefined || v === '') return '—';
+  var n = Number(v);
+  return isNaN(n) ? '—' : n.toFixed(d || 0);
+}
+
+// ─── Update UI ────────────────────────────────────────────────────────────────
+function setMeta(lat) {
+  if (!lat) return;
+  document.getElementById('v-co2').textContent  = fv(lat.co2);
+  document.getElementById('v-pm25').textContent = fv(lat.pm25, 1);
+  document.getElementById('v-pm10').textContent = fv(lat.pm10, 1);
+  document.getElementById('v-voc').textContent  = fv(lat.voc);
+  document.getElementById('v-temp').textContent = fv(lat.temp, 1);
+  document.getElementById('v-hum').textContent  = fv(lat.hum);
+  document.getElementById('v-aqi').textContent  = fv(lat.aqi);
+  document.getElementById('v-lbl').textContent  = lat.label || '—';
+  document.getElementById('v-bat').textContent  = fv(lat.bat);
+
+  var b = document.getElementById('badge');
+  b.textContent = (lat.label || '—') + ' · AQI ' + fv(lat.aqi);
+  b.className = 'badge ' + aqiClass(Number(lat.aqi));
+
+  if (lat.ts) {
+    var t = new Date(lat.ts);
+    document.getElementById('upd').textContent = 'Updated ' + t.toLocaleTimeString();
+  }
+}
+
+function setCharts(rows) {
+  function pts(fn) {
+    return rows.map(function(r) { return { x: new Date(r[0]), y: fn(r) }; });
+  }
+  CH.co2.data.datasets[0].data = pts(function(r){ return r[1]; });
+  CH.pm.data.datasets[0].data  = pts(function(r){ return r[3]; });
+  CH.pm.data.datasets[1].data  = pts(function(r){ return r[5]; });
+  CH.voc.data.datasets[0].data = pts(function(r){ return r[6]; });
+  CH.th.data.datasets[0].data  = pts(function(r){ return r[7]; });
+  CH.th.data.datasets[1].data  = pts(function(r){ return r[8]; });
+  CH.aqi.data.datasets[0].data = pts(function(r){ return r[9]; });
+
+  Object.keys(CH).forEach(function(k) { CH[k].update(); });
+  document.getElementById('pts').textContent = rows.length + ' data points';
+}
+
+// ─── Fetch & refresh ──────────────────────────────────────────────────────────
+function load() {
+  document.getElementById('stxt').textContent = 'Fetching data…';
+  fetch(API + '?data=1&range=' + range)
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      setMeta(j.latest);
+      setCharts(j.rows || []);
+      document.getElementById('stxt').textContent =
+        'Live · auto-refreshes every 30 s';
+    })
+    .catch(function(e) {
+      document.getElementById('stxt').textContent = 'Error: ' + e.message;
+    });
+}
+
+function setRange(r) {
+  range = r;
+  document.querySelectorAll('.rb').forEach(function(b) {
+    b.classList.toggle('on', b.dataset.r === r);
+  });
+  load();
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.rb').forEach(function(b) {
+  b.addEventListener('click', function() { setRange(b.dataset.r); });
+});
+
+initCharts();
+load();
+refreshTimer = setInterval(load, 30000);
+</script>
+</body>
+</html>
